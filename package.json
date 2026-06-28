@@ -1,0 +1,35 @@
+{
+  "name": "firehh",
+  "version": "0.1.0",
+  "description": "Bun-powered HeadHunter CLI for vacancy search, resume checks, OAuth tokens, and applications.",
+  "type": "module",
+  "bin": {
+    "firehh": "./src/firehh.ts"
+  },
+  "files": [
+    "src",
+    ".env.example",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mergemat/firehh.git"
+  },
+  "keywords": [
+    "headhunter",
+    "hh",
+    "cli",
+    "bun"
+  ],
+  "author": "Mergemat",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Mergemat/firehh/issues"
+  },
+  "homepage": "https://github.com/Mergemat/firehh#readme",
+  "scripts": {
+    "firehh": "bun src/firehh.ts",
+    "check": "bun src/firehh.ts --help"
+  }
+}

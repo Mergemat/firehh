@@ -1,0 +1,6 @@
+.env
+.env.local
+.hh-token.json
+node_modules/
+*.log
+*.tgz
