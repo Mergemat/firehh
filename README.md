@@ -10,7 +10,14 @@ bun install -g firehh
 
 ## Configure
 
-Copy `.env.example` into your project or shell profile and set:
+The CLI includes HH.ru Android OAuth credentials for full API access. You can
+start auth without creating a `.env`:
+
+```sh
+firehh auth login
+```
+
+Optional overrides:
 
 ```sh
 HH_CLIENT_ID=
@@ -20,22 +27,19 @@ HH_TOKEN_FILE=.hh-token.json
 HH_SUITABLE_TEXT=Frontend OR React OR Next.js
 ```
 
-Then authorize:
-
-```sh
-firehh auth-url
-firehh auth-code '<code-or-redirect-url>'
-```
-
 ## Usage
 
 ```sh
-firehh <vacancy-id>
-firehh resumes
-firehh suitable [resume-id] --page 0 --per-page 20
-firehh vacancy-resumes <vacancy-id>
-firehh apply <vacancy-id> --resume <resume-id> --message-file cover-letter.txt
-firehh token
+firehh auth login
+firehh auth status
+firehh resumes list
+firehh vacancies view <vacancy-id>
+firehh vacancies suitable [resume-id] --page 0 --per-page 20
+firehh resumes for-vacancy <vacancy-id>
+firehh applications apply <vacancy-id> --resume <resume-id> --message-file cover-letter.txt
 ```
 
-Use `--json` on read commands to print raw API responses.
+Command results are JSON on stdout by default. Prompts, diagnostics, and errors
+go to stderr. Legacy aliases still work: `firehh <vacancy-id>`, `firehh resumes`,
+`firehh suitable`, `firehh vacancy-resumes`, `firehh apply`, `firehh auth-url`,
+`firehh auth-code`, and `firehh token`.
