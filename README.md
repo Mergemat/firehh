@@ -5,7 +5,7 @@ Bun-powered CLI for HeadHunter vacancy lookup, resume matching, OAuth token stor
 ## Install
 
 ```sh
-bun install -g firehh
+bun install -g @bagasek/firehh
 ```
 
 ## Configure

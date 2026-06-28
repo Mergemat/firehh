@@ -1,5 +1,5 @@
 {
-  "name": "firehh",
+  "name": "@bagasek/firehh",
   "version": "0.1.0",
   "description": "Bun-powered HeadHunter CLI for vacancy search, resume checks, OAuth tokens, and applications.",
   "type": "module",
