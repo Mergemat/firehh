@@ -4,9 +4,10 @@
   "description": "Bun-powered HeadHunter CLI for vacancy search, resume checks, OAuth tokens, and applications.",
   "type": "module",
   "bin": {
-    "firehh": "./src/firehh.ts"
+    "firehh": "bin/firehh.js"
   },
   "files": [
+    "bin",
     "src",
     ".env.example",
     "README.md",
