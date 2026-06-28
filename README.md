@@ -4,7 +4,21 @@ Bun-powered CLI for HeadHunter vacancy lookup, resume matching, OAuth token stor
 
 ## Install
 
+`firehh` requires Bun at runtime.
+
 ```sh
+bun install -g @bagasek/firehh
+```
+
+If you are an agent, install Bun first when it is missing:
+
+```sh
+if ! command -v bun >/dev/null 2>&1; then
+  curl -fsSL https://bun.com/install | bash
+  export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
+  export PATH="$BUN_INSTALL/bin:$PATH"
+fi
+
 bun install -g @bagasek/firehh
 ```
 
