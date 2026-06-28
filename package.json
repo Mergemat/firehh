@@ -29,6 +29,9 @@
     "url": "https://github.com/Mergemat/firehh/issues"
   },
   "homepage": "https://github.com/Mergemat/firehh#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "firehh": "bun src/firehh.ts",
     "check": "bun src/firehh.ts --help"
