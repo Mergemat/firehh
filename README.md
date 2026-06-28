@@ -31,13 +31,22 @@ start auth without creating a `.env`:
 firehh auth login
 ```
 
+`auth login` is browser-assisted: it launches Chrome or Chromium with a clean
+temporary profile, watches DevTools for the `hhandroid://oauthresponse`
+redirect, exchanges the captured code, and saves the token. No redirect URL
+copying is needed.
+
+Tokens are stored globally by default at `~/.config/firehh/token.json`, so one
+login can be reused across projects. Set `HH_TOKEN_FILE` only when you need a
+custom path.
+
 Optional overrides:
 
 ```sh
 HH_CLIENT_ID=
 HH_CLIENT_SECRET=
 HH_REDIRECT_URI=hhandroid://oauthresponse
-HH_TOKEN_FILE=.hh-token.json
+HH_TOKEN_FILE=
 HH_SUITABLE_TEXT=Frontend OR React OR Next.js
 ```
 
@@ -55,5 +64,4 @@ firehh applications apply <vacancy-id> --resume <resume-id> --message-file cover
 
 Command results are JSON on stdout by default. Prompts, diagnostics, and errors
 go to stderr. Legacy aliases still work: `firehh <vacancy-id>`, `firehh resumes`,
-`firehh suitable`, `firehh vacancy-resumes`, `firehh apply`, `firehh auth-url`,
-`firehh auth-code`, and `firehh token`.
+`firehh suitable`, `firehh vacancy-resumes`, `firehh apply`, and `firehh token`.

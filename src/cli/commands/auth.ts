@@ -1,8 +1,5 @@
-import {
-  exchangeCodeForToken,
-  getAuthUrl,
-  readToken,
-} from "../../auth";
+import { captureAuthRedirectWithBrowser } from "../../browser-auth";
+import { exchangeCodeForToken, readTokenWithSource } from "../../auth";
 import { clientCredentials, tokenFilePath } from "../../config";
 import { errorMessage, writeData, writeError } from "../output";
 import type { CommandSpec } from "./types";
@@ -10,36 +7,50 @@ import { legacy, scoped } from "./shared";
 
 export const authLoginCommand: CommandSpec = {
   id: "auth.login",
-  usage: "auth login [--code <code-or-redirect-url>]",
+  usage: "auth login [--timeout <seconds>] [--browser <path>]",
   help: {
-    summary: "Open HH OAuth and save a local token",
+    summary: "Authorize HH OAuth in Chromium and save a global token",
     description:
-      "Prints the HH OAuth URL, prompts for the redirect URL or code, exchanges it, and stores the token.",
+      "Starts Chrome or Chromium, captures the hhandroid:// OAuth redirect through DevTools, exchanges it, and stores the token.",
     options: [
       {
-        name: "--code",
-        value: "<code-or-redirect-url>",
-        summary: "Skip the prompt and exchange this code immediately",
+        name: "--browser",
+        value: "<path>",
+        summary: "Chrome or Chromium executable path",
+      },
+      {
+        name: "--timeout",
+        value: "<seconds>",
+        summary: "Browser redirect capture timeout",
+        defaultValue: "180",
       },
     ],
-    aliases: ["auth-url", "auth-code <code-or-redirect-url>"],
     examples: [
-      { command: "firehh auth login", summary: "Interactive browser flow" },
       {
-        command: "firehh auth login --code 'hhandroid://oauthresponse?code=...'",
-        summary: "Exchange a copied redirect URL directly",
+        command: "firehh auth login",
+        summary: "Browser-assisted OAuth capture",
       },
     ],
   },
   matches: (parsed) => scoped(parsed, "auth", "login"),
   run: async ({ parsed, context }) => {
     try {
-      const authUrl = getAuthUrl(context.env);
       const credentials = clientCredentials(context.env);
-      const codeOrUrl =
-        parsed.flags.get("code") ||
-        (await promptForCode(context, authUrl, credentials.source));
-      const token = await exchangeCodeForToken(context.env, codeOrUrl);
+      context.io.stderr(
+        [
+          "HH OAuth login",
+          `Credential source: ${credentials.source}`,
+          `Redirect URI: ${credentials.redirectUri}`,
+          "",
+        ].join("\n"),
+      );
+      const redirectUrl = await captureAuthRedirectWithBrowser({
+        env: context.env,
+        timeoutMs: timeoutMs(parsed.flags),
+        browserPath: parsed.flags.get("browser") || undefined,
+        onStatus: (message) => context.io.stderr(`${message}\n`),
+      });
+      const token = await exchangeCodeForToken(context.env, redirectUrl);
 
       writeData(context, {
         token_file: tokenFilePath(context.env),
@@ -47,72 +58,7 @@ export const authLoginCommand: CommandSpec = {
           ? new Date(token.expires_at).toISOString()
           : null,
         credential_source: credentials.source,
-      });
-      return 0;
-    } catch (error) {
-      writeError(context, "AUTH_ERROR", errorMessage(error));
-      return 2;
-    }
-  },
-};
-
-export const authUrlCommand: CommandSpec = {
-  id: "auth.url",
-  usage: "auth url",
-  help: {
-    summary: "Print the HH OAuth URL",
-    description:
-      "Returns the authorization URL using built-in Android credentials unless env credentials override them.",
-    aliases: ["auth-url"],
-    examples: [{ command: "firehh auth url" }],
-  },
-  matches: (parsed) => scoped(parsed, "auth", "url") || legacy(parsed, "auth-url"),
-  run: async ({ context }) => {
-    try {
-      const credentials = clientCredentials(context.env);
-      writeData(context, {
-        url: getAuthUrl(context.env),
-        redirect_uri: credentials.redirectUri,
-        credential_source: credentials.source,
-      });
-      return 0;
-    } catch (error) {
-      writeError(context, "AUTH_ERROR", errorMessage(error));
-      return 2;
-    }
-  },
-};
-
-export const authCodeCommand: CommandSpec = {
-  id: "auth.code",
-  usage: "auth code <code-or-redirect-url>",
-  help: {
-    summary: "Exchange an HH OAuth code for a stored token",
-    description:
-      "Accepts either a raw code or the full hhandroid:// redirect URL from HH.",
-    aliases: ["auth-code <code-or-redirect-url>"],
-    examples: [
-      {
-        command: "firehh auth code 'hhandroid://oauthresponse?code=...'",
-      },
-    ],
-  },
-  matches: (parsed) => scoped(parsed, "auth", "code") || legacy(parsed, "auth-code"),
-  run: async ({ parsed, context }) => {
-    const codeOrUrl =
-      parsed.command === "auth-code" ? parsed.positionals[1] : parsed.positionals[2];
-    if (!codeOrUrl) {
-      writeError(context, "INPUT_ERROR", "Usage: firehh auth code <code-or-url>");
-      return 1;
-    }
-
-    try {
-      const token = await exchangeCodeForToken(context.env, codeOrUrl);
-      writeData(context, {
-        token_file: tokenFilePath(context.env),
-        expires_at: token.expires_at
-          ? new Date(token.expires_at).toISOString()
-          : null,
+        auth_flow: "browser",
       });
       return 0;
     } catch (error) {
@@ -135,9 +81,12 @@ export const authStatusCommand: CommandSpec = {
   matches: (parsed) => scoped(parsed, "auth", "status") || legacy(parsed, "token"),
   run: async ({ context }) => {
     try {
-      const token = await readToken(context.env);
+      const result = await readTokenWithSource(context.env);
+      const token = result?.token ?? null;
       writeData(context, {
         token_file: tokenFilePath(context.env),
+        token_source: result?.source ?? "missing",
+        token_source_file: result?.path ?? null,
         access_token: token?.access_token ? "present" : "missing",
         refresh_token: token?.refresh_token ? "present" : "missing",
         expires_at: token?.expires_at
@@ -152,24 +101,14 @@ export const authStatusCommand: CommandSpec = {
   },
 };
 
-async function promptForCode(
-  context: Parameters<CommandSpec["run"]>[0]["context"],
-  authUrl: string,
-  credentialSource: "env" | "android",
-): Promise<string> {
-  context.io.stderr(
-    [
-      "HH OAuth login",
-      `Credential source: ${credentialSource}`,
-      "",
-      "1. Open this URL:",
-      authUrl,
-      "",
-      "2. Approve access in HH.",
-      "3. Paste the final redirect URL or just the code below.",
-      "",
-    ].join("\n"),
-  );
+function timeoutMs(flags: Map<string, string>): number {
+  const raw = flags.get("timeout");
+  if (!raw) return 180_000;
 
-  return context.io.question("HH code or redirect URL: ");
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    throw new Error("--timeout must be a positive number of seconds.");
+  }
+
+  return seconds * 1000;
 }

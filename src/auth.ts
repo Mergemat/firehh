@@ -1,25 +1,54 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { AUTH_URL, TOKEN_URL, clientCredentials, fromEnv, tokenFilePath } from "./config";
+import {
+  AUTH_URL,
+  TOKEN_URL,
+  clientCredentials,
+  fromEnv,
+  tokenFilePath,
+} from "./config";
 import type { EnvMap, TokenFile } from "./types";
 
-export async function readToken(env: EnvMap): Promise<TokenFile | null> {
+export type TokenSource = "env" | "file";
+
+export type TokenReadResult = {
+  token: TokenFile;
+  source: TokenSource;
+  path: string | null;
+};
+
+export async function readTokenWithSource(
+  env: EnvMap,
+): Promise<TokenReadResult | null> {
   const rawToken =
     fromEnv(env, "HH_ACCESS_TOKEN") || fromEnv(env, "HH_TOKEN") || null;
 
   if (rawToken) {
     try {
-      return JSON.parse(rawToken) as TokenFile;
+      return {
+        token: JSON.parse(rawToken) as TokenFile,
+        source: "env",
+        path: null,
+      };
     } catch {
-      return { access_token: rawToken };
+      return { token: { access_token: rawToken }, source: "env", path: null };
     }
   }
 
+  const path = tokenFilePath(env);
   try {
-    return JSON.parse(await readFile(tokenFilePath(env), "utf8")) as TokenFile;
+    return {
+      token: JSON.parse(await readFile(path, "utf8")) as TokenFile,
+      source: "file",
+      path,
+    };
   } catch {
     return null;
   }
+}
+
+export async function readToken(env: EnvMap): Promise<TokenFile | null> {
+  return (await readTokenWithSource(env))?.token ?? null;
 }
 
 export async function saveToken(
@@ -150,7 +179,6 @@ export async function requireValidToken(env: EnvMap): Promise<TokenFile> {
       [
         "No HH OAuth token found.",
         "Run: firehh auth login",
-        "Or use: firehh auth url, then firehh auth code '<code-or-redirect-url>'",
       ].join("\n"),
     );
   }

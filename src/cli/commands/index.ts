@@ -1,9 +1,4 @@
-import {
-  authCodeCommand,
-  authLoginCommand,
-  authStatusCommand,
-  authUrlCommand,
-} from "./auth";
+import { authLoginCommand, authStatusCommand } from "./auth";
 import { applicationsApplyCommand } from "./applications";
 import { resumesForVacancyCommand, resumesListCommand } from "./resumes";
 import { vacanciesSuitableCommand, vacancyViewCommand } from "./vacancies";
@@ -14,13 +9,8 @@ export const commandModules: CommandModule[] = [
     scope: "auth",
     summary: "OAuth login and token storage",
     description:
-      "Authorize HH once, exchange OAuth codes, and inspect local token status.",
-    commands: [
-      authLoginCommand,
-      authUrlCommand,
-      authCodeCommand,
-      authStatusCommand,
-    ],
+      "Authorize HH once through browser capture and inspect token status.",
+    commands: [authLoginCommand, authStatusCommand],
   },
   {
     scope: "resumes",

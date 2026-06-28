@@ -1,16 +1,21 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { EnvMap } from "./types";
 
+export const CLI_NAME = "firehh";
 export const API_BASE_URL = "https://api.hh.ru";
 export const AUTH_URL = "https://hh.ru/oauth/authorize";
 export const TOKEN_URL = "https://hh.ru/oauth/token";
 export const DEFAULT_REDIRECT_URI = "hhandroid://oauthresponse";
-export const DEFAULT_TOKEN_FILE = join(process.cwd(), ".hh-token.json");
+export const DEFAULT_TOKEN_FILE = join(
+  process.env.XDG_CONFIG_HOME || join(homedir(), ".config"),
+  CLI_NAME,
+  "token.json",
+);
 export const DEFAULT_SUITABLE_TEXT = "Frontend OR React OR Next.js";
 export const DEVELOPER_PROFESSIONAL_ROLE_ID = "96";
-export const CLI_NAME = "firehh";
 
 const ANDROID_CLIENT_ID =
   "HIOMIAS39CA9DICTA7JIO64LQKQJF5AGIK74G9ITJKLNEDAOH5FHS5G1JI7FOEGD";

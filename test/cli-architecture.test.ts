@@ -13,7 +13,7 @@ describe("cli architecture", () => {
     ).toEqual([
       {
         scope: "auth",
-        commands: ["auth.login", "auth.url", "auth.code", "auth.status"],
+        commands: ["auth.login", "auth.status"],
       },
       {
         scope: "resumes",
@@ -44,6 +44,8 @@ describe("cli architecture", () => {
     expect(renderHelp()).toContain("firehh <module> <command> [flags]");
     expect(renderHelp()).toContain("Command results are JSON on stdout");
     expect(renderModuleHelp(commandModules[0])).toContain("firehh auth login");
+    expect(renderModuleHelp(commandModules[0])).not.toContain("auth url");
+    expect(renderModuleHelp(commandModules[0])).not.toContain("auth code");
   });
 
   test("parser separates flags from positional args", () => {

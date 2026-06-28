@@ -138,8 +138,6 @@ function looksLikeLegacyVacancyView(parsed: ParsedArgs): boolean {
 
   return ![
     "auth",
-    "auth-url",
-    "auth-code",
     "token",
     "resumes",
     "suitable",
