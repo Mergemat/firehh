@@ -29,6 +29,8 @@ type DevtoolsMessage = {
   error?: unknown;
 };
 
+type RemoveProfile = typeof rm;
+
 export async function captureAuthRedirectWithBrowser(
   options: BrowserAuthOptions,
 ): Promise<string> {
@@ -64,9 +66,94 @@ export async function captureAuthRedirectWithBrowser(
       options.timeoutMs,
     );
   } finally {
-    browser?.kill();
-    await rm(userDataDir, { force: true, recursive: true });
+    await cleanupBrowserProfile({
+      browser,
+      userDataDir,
+      onStatus: options.onStatus,
+    });
   }
+}
+
+export async function cleanupBrowserProfile(options: {
+  browser: ChildProcess | null;
+  userDataDir: string;
+  onStatus?: (message: string) => void;
+  removeProfile?: RemoveProfile;
+  retryDelaysMs?: readonly number[];
+}): Promise<void> {
+  const removeProfile = options.removeProfile ?? rm;
+  const retryDelaysMs = options.retryDelaysMs ?? [0, 100, 250, 500, 1_000, 1_500];
+  let lastError: unknown = null;
+
+  terminateBrowser(options.browser);
+  await waitForBrowserExit(options.browser, 1_500);
+
+  for (const delayMs of retryDelaysMs) {
+    if (delayMs > 0) await sleep(delayMs);
+
+    try {
+      await removeProfile(options.userDataDir, { force: true, recursive: true });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  options.onStatus?.(
+    `Could not remove temporary browser profile; it can be deleted later. ${formatCleanupError(lastError)}`,
+  );
+}
+
+function terminateBrowser(browser: ChildProcess | null): void {
+  if (!browser) return;
+
+  try {
+    browser.kill();
+  } catch {
+    // Cleanup must not mask the OAuth redirect or token exchange error.
+  }
+}
+
+function waitForBrowserExit(
+  browser: ChildProcess | null,
+  timeoutMs: number,
+): Promise<void> {
+  if (!browser || browser.exitCode !== null || browser.signalCode !== null) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      browser.off("exit", finish);
+      browser.off("close", finish);
+      resolve();
+    };
+
+    timer = setTimeout(finish, timeoutMs);
+    browser.once("exit", finish);
+    browser.once("close", finish);
+  });
+}
+
+function formatCleanupError(error: unknown): string {
+  if (!error || typeof error !== "object") return "";
+
+  const code = "code" in error ? String(error.code) : "";
+  const message =
+    "message" in error && typeof error.message === "string"
+      ? error.message
+      : "";
+
+  if (code && message) return `Reason: ${code}: ${message}`;
+  if (code) return `Reason: ${code}`;
+  if (message) return `Reason: ${message}`;
+  return "";
 }
 
 function spawnBrowser(browserPath: string, userDataDir: string): ChildProcess {
