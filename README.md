@@ -64,3 +64,7 @@ firehh applications apply <vacancy-id> --resume <resume-id> --message-file cover
 Command results are JSON on stdout by default. Prompts, diagnostics, and errors
 go to stderr. Legacy aliases still work: `firehh <vacancy-id>`, `firehh resumes`,
 `firehh suitable <resume-id>`, `firehh vacancy-resumes`, `firehh apply`, and `firehh token`.
+
+`firehh applications apply` does not block applications with local vacancy
+filters. It sends the requested vacancy, resume, and cover letter to HH; any
+rejection comes from the HH API response.

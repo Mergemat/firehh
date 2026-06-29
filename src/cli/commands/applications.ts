@@ -1,5 +1,4 @@
 import { applyToVacancy, readCoverLetter } from "../../hh/applications";
-import { requireEligibleVacancy, vacancySummary } from "../../hh/vacancies";
 import { errorMessage, writeData, writeError } from "../output";
 import type { CommandSpec } from "./types";
 import { legacy, scoped } from "./shared";
@@ -8,9 +7,9 @@ export const applicationsApplyCommand: CommandSpec = {
   id: "applications.apply",
   usage: "applications apply <vacancy-id> --resume <resume-id> (--message <text> | --message-file <path>) [--dry-run]",
   help: {
-    summary: "Apply to an eligible HH vacancy",
+    summary: "Apply to an HH vacancy",
     description:
-      "Checks accredited IT and remote eligibility before posting the negotiation. DOCX cover letters are read through macOS textutil.",
+      "Posts the negotiation without local vacancy eligibility checks. DOCX cover letters are read through macOS textutil.",
     options: [
       {
         name: "--resume",
@@ -30,7 +29,7 @@ export const applicationsApplyCommand: CommandSpec = {
       },
       {
         name: "--dry-run",
-        summary: "Validate and print payload without applying",
+        summary: "Print payload without applying",
       },
     ],
     aliases: ["apply <vacancy-id>"],
@@ -59,14 +58,13 @@ export const applicationsApplyCommand: CommandSpec = {
     }
 
     try {
-      const vacancy = await requireEligibleVacancy(context.env, vacancyId);
       const message = await readCoverLetter(parsed.flags);
       if (!message) throw new Error("Cover letter is empty.");
 
       if (dryRun) {
         writeData(context, {
           dry_run: true,
-          vacancy: vacancySummary(vacancy),
+          vacancy_id: vacancyId,
           resume_id: resumeId,
           cover_letter_chars: message.length,
           cover_letter: message,

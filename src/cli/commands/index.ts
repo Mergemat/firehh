@@ -30,7 +30,7 @@ export const commandModules: CommandModule[] = [
     scope: "applications",
     summary: "Apply to vacancies",
     description:
-      "Validate eligibility, read a cover letter, and create HH negotiations.",
+      "Read a cover letter and create HH negotiations without local vacancy filters.",
     commands: [applicationsApplyCommand],
   },
 ];
