@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { parseArgs } from "../src/cli/args";
 import { commandModules, commandSpecs } from "../src/cli/commands";
 import { renderHelp, renderModuleHelp } from "../src/cli/help";
+import { runCli } from "../src/cli/run";
+import packageJson from "../package.json";
 
 describe("cli architecture", () => {
   test("commands are declared through scoped modules", () => {
@@ -75,5 +77,27 @@ describe("cli architecture", () => {
         ["dry-run", ""],
       ]),
     });
+  });
+
+  test("version is available as a global flag", async () => {
+    let stdout = "";
+    let stderr = "";
+
+    const exitCode = await runCli(["--version"], {
+      env: {},
+      io: {
+        stdout: (text) => {
+          stdout += text;
+        },
+        stderr: (text) => {
+          stderr += text;
+        },
+        question: async () => "",
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe(`firehh ${packageJson.version}\n`);
+    expect(stderr).toBe("");
   });
 });

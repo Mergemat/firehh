@@ -1,4 +1,5 @@
 import { CLI_NAME } from "../config";
+import packageJson from "../../package.json";
 import { commandModules } from "./commands";
 import type { CommandModule, CommandOption, CommandSpec } from "./commands";
 
@@ -6,6 +7,10 @@ const globalOptions: CommandOption[] = [
   {
     name: "--help",
     summary: "Show help for a command or module",
+  },
+  {
+    name: "--version",
+    summary: "Show CLI version",
   },
 ];
 
@@ -85,6 +90,10 @@ export function renderCommandHelp(command: CommandSpec): string {
     `  ${CLI_NAME} ${command.usage}`,
     ...sections,
   ].join("\n");
+}
+
+export function renderVersion(): string {
+  return `${CLI_NAME} ${packageJson.version}\n`;
 }
 
 function renderOptionSection(options: CommandOption[]): string {

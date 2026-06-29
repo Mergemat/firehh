@@ -1,6 +1,11 @@
 import { parseArgs } from "./args";
 import { commandModules, commandSpecs } from "./commands";
-import { renderCommandHelp, renderHelp, renderModuleHelp } from "./help";
+import {
+  renderCommandHelp,
+  renderHelp,
+  renderModuleHelp,
+  renderVersion,
+} from "./help";
 import { writeError } from "./output";
 import type { CliContext } from "./types";
 
@@ -12,6 +17,11 @@ export async function runCli(
 
   if (args.length === 0 || parsed.command === "--help") {
     context.io.stdout(renderHelp());
+    return 0;
+  }
+
+  if (parsed.flags.has("version") && parsed.positionals.length === 0) {
+    context.io.stdout(renderVersion());
     return 0;
   }
 
