@@ -23,7 +23,7 @@ export const commandModules: CommandModule[] = [
     scope: "vacancies",
     summary: "Vacancy lookup and suitable search",
     description:
-      "Fetch vacancy details or search suitable remote accredited frontend vacancies.",
+      "Fetch vacancy details or search HH suitable vacancies by resume.",
     commands: [vacancyViewCommand, vacanciesSuitableCommand],
   },
   {

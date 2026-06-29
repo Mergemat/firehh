@@ -1,16 +1,9 @@
-import {
-  DEFAULT_SUITABLE_TEXT,
-  DEVELOPER_PROFESSIONAL_ROLE_ID,
-  fromEnv,
-} from "../config";
 import type { EnvMap, Vacancy, VacancySearchResponse } from "../types";
 import { hhJson } from "./client";
 
 export type SuitableSearchOptions = {
-  text?: string;
   page: number;
   perPage: number;
-  scanPages: number;
 };
 
 export async function getVacancy(
@@ -32,17 +25,6 @@ export function isRemoteVacancy(vacancy: Vacancy): boolean {
   );
 }
 
-export function isFrontendVacancy(vacancy: Vacancy): boolean {
-  const title = vacancy.name.toLowerCase();
-
-  return (
-    /front[\s-]?end|фронт|react|next\.?js/.test(title) &&
-    !/react native|native|vue|angular|backend|back[\s-]?end|full[\s-]?stack|fullstack|golang|go-разработчик|java разработчик|java developer|c#|\.net|php|laravel|python/.test(
-      title,
-    )
-  );
-}
-
 export function formatAccreditation(vacancy: Vacancy): string {
   return isAccreditedItVacancy(vacancy)
     ? "accredited IT employer"
@@ -57,7 +39,6 @@ export function vacancySummary(vacancy: Vacancy) {
     area: vacancy.area?.name ?? null,
     accredited_it_employer: isAccreditedItVacancy(vacancy),
     remote: isRemoteVacancy(vacancy),
-    frontend: isFrontendVacancy(vacancy),
     salary: vacancy.salary ?? null,
     experience: vacancy.experience?.name ?? null,
     employment: vacancy.employment?.name ?? null,
@@ -101,14 +82,11 @@ export async function requireEligibleVacancy(
 }
 
 export function suitableSearchOptions(
-  env: EnvMap,
   flags: Map<string, string>,
 ): SuitableSearchOptions {
   return {
-    text: flags.get("text") || fromEnv(env, "HH_SUITABLE_TEXT") || DEFAULT_SUITABLE_TEXT,
     page: numberFlag(flags, "page", 0),
-    perPage: Math.min(numberFlag(flags, "per-page", 20), 100),
-    scanPages: Math.min(numberFlag(flags, "scan-pages", 5), 20),
+    perPage: numberFlag(flags, "per-page", 20, { min: 1, max: 100 }),
   };
 }
 
@@ -117,59 +95,13 @@ export async function searchSuitableVacancies(
   resumeId: string,
   options: SuitableSearchOptions,
 ): Promise<VacancySearchResponse> {
-  const matchedItems: Vacancy[] = [];
-  let firstResponse: VacancySearchResponse | null = null;
-  let scannedPages = 0;
+  const params = new URLSearchParams({
+    resume: resumeId,
+    page: String(options.page),
+    per_page: String(options.perPage),
+  });
 
-  for (
-    let page = options.page;
-    page < options.page + options.scanPages;
-    page += 1
-  ) {
-    const params = new URLSearchParams({
-      resume: resumeId,
-      text: options.text ?? DEFAULT_SUITABLE_TEXT,
-      label: "accredited_it",
-      professional_role: DEVELOPER_PROFESSIONAL_ROLE_ID,
-      schedule: "remote",
-      order_by: "publication_time",
-      page: String(page),
-      per_page: "100",
-    });
-
-    const response = await hhJson<VacancySearchResponse>(
-      env,
-      `/vacancies?${params.toString()}`,
-    );
-
-    firstResponse ??= response;
-    scannedPages += 1;
-
-    matchedItems.push(
-      ...response.items.filter(
-        (vacancy) =>
-          isAccreditedItVacancy(vacancy) &&
-          isRemoteVacancy(vacancy) &&
-          isFrontendVacancy(vacancy),
-      ),
-    );
-
-    if (matchedItems.length >= options.perPage || page >= response.pages - 1) {
-      break;
-    }
-  }
-
-  if (!firstResponse) {
-    throw new Error("HH returned no vacancy search response.");
-  }
-
-  return {
-    ...firstResponse,
-    per_page: options.perPage,
-    items: matchedItems.slice(0, options.perPage),
-    scanned_pages: scannedPages,
-    matched_items: matchedItems.length,
-  };
+  return hhJson<VacancySearchResponse>(env, `/vacancies?${params.toString()}`);
 }
 
 export function htmlToText(html = ""): string {
@@ -191,12 +123,17 @@ function numberFlag(
   flags: Map<string, string>,
   key: string,
   fallback: number,
+  range: { min?: number; max?: number } = {},
 ): number {
   const value = flags.get(key);
   if (value === undefined || value === "") return fallback;
 
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) {
+  if (!Number.isInteger(parsed) || parsed < (range.min ?? 0)) {
+    throw new Error(`Invalid number for --${key}: ${value}`);
+  }
+
+  if (range.max !== undefined && parsed > range.max) {
     throw new Error(`Invalid number for --${key}: ${value}`);
   }
 

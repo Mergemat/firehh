@@ -30,7 +30,7 @@ ${modules}
 GETTING STARTED
   ${CLI_NAME} auth login
   ${CLI_NAME} resumes list
-  ${CLI_NAME} vacancies suitable
+  ${CLI_NAME} vacancies suitable <resume-id>
   ${CLI_NAME} vacancies view <vacancy-id>
   ${CLI_NAME} applications apply <vacancy-id> --resume <resume-id> --message-file cover-letter.txt
 

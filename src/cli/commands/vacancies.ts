@@ -1,4 +1,3 @@
-import { getSingleResumeId } from "../../hh/resumes";
 import {
   getVacancy,
   searchSuitableVacancies,
@@ -43,11 +42,11 @@ export const vacancyViewCommand: CommandSpec = {
 
 export const vacanciesSuitableCommand: CommandSpec = {
   id: "vacancies.suitable",
-  usage: "vacancies suitable [resume-id] [--page <n>] [--per-page <n>] [--scan-pages <n>] [--text <query>]",
+  usage: "vacancies suitable <resume-id> [--page <n>] [--per-page <n>]",
   help: {
-    summary: "Search suitable frontend vacancies for a resume",
+    summary: "Search HH suitable vacancies for a resume",
     description:
-      "Uses HH suitable-vacancy search with built-in remote, accredited IT, developer-role, and frontend title filters.",
+      "Uses HH suitable-vacancy search by resume without extra local role, title, schedule, or employer filters.",
     options: [
       {
         name: "--page",
@@ -58,25 +57,12 @@ export const vacanciesSuitableCommand: CommandSpec = {
       {
         name: "--per-page",
         value: "<n>",
-        summary: "Number of returned frontend matches",
+        summary: "Number of returned vacancies",
         defaultValue: "20",
       },
-      {
-        name: "--scan-pages",
-        value: "<n>",
-        summary: "HH API pages to scan for frontend matches",
-        defaultValue: "5",
-      },
-      {
-        name: "--text",
-        value: "<query>",
-        summary: "Override search text",
-        defaultValue: "Frontend OR React OR Next.js",
-      },
     ],
-    aliases: ["suitable [resume-id]"],
+    aliases: ["suitable <resume-id>"],
     examples: [
-      { command: "firehh vacancies suitable" },
       { command: "firehh vacancies suitable <resume-id> --per-page 50" },
     ],
   },
@@ -85,7 +71,32 @@ export const vacanciesSuitableCommand: CommandSpec = {
     try {
       const explicitResumeId =
         parsed.command === "suitable" ? parsed.positionals[1] : parsed.positionals[2];
-      const resumeId = explicitResumeId || (await getSingleResumeId(context.env));
+
+      const unsupportedFlag = firstUnsupportedFlag(parsed.flags, [
+        "page",
+        "per-page",
+        "help",
+        "version",
+      ]);
+      if (unsupportedFlag) {
+        writeError(
+          context,
+          "INPUT_ERROR",
+          `Unsupported flag for vacancies suitable: --${unsupportedFlag}`,
+        );
+        return 1;
+      }
+
+      if (!explicitResumeId) {
+        writeError(
+          context,
+          "INPUT_ERROR",
+          "Usage: firehh vacancies suitable <resume-id> [--page <n>] [--per-page <n>]",
+        );
+        return 1;
+      }
+
+      const resumeId = explicitResumeId;
 
       if (/^\d+$/.test(resumeId)) {
         writeError(
@@ -100,7 +111,7 @@ export const vacanciesSuitableCommand: CommandSpec = {
         return 1;
       }
 
-      const options = suitableSearchOptions(context.env, parsed.flags);
+      const options = suitableSearchOptions(parsed.flags);
       const vacancies = await searchSuitableVacancies(
         context.env,
         resumeId,
@@ -109,25 +120,24 @@ export const vacanciesSuitableCommand: CommandSpec = {
 
       writeData(context, {
         resume_id: resumeId,
-        filters: {
-          text: options.text,
-          professional_role: "96",
-          label: "accredited_it",
-          schedule: "remote",
-          local_title_filter: "frontend/react/next.js excluding backend/fullstack/mobile-adjacent stacks",
+        query: {
+          resume: resumeId,
         },
         found: vacancies.found,
         page: vacancies.page,
         pages: vacancies.pages,
         per_page: vacancies.per_page,
-        scanned_pages: vacancies.scanned_pages ?? 1,
-        matched_items: vacancies.matched_items ?? vacancies.items.length,
         items: vacancies.items.map(vacancySummary),
       });
       return 0;
     } catch (error) {
-      writeError(context, "HH_ERROR", errorMessage(error));
-      return 2;
+      const inputError = isInputError(error);
+      writeError(
+        context,
+        inputError ? "INPUT_ERROR" : "HH_ERROR",
+        errorMessage(error),
+      );
+      return inputError ? 1 : 2;
     }
   },
 };
@@ -146,4 +156,21 @@ function looksLikeLegacyVacancyView(parsed: ParsedArgs): boolean {
     "applications",
     "apply",
   ].includes(parsed.command);
+}
+
+function firstUnsupportedFlag(
+  flags: Map<string, string>,
+  allowedFlags: string[],
+): string | null {
+  const allowed = new Set(allowedFlags);
+
+  for (const flag of flags.keys()) {
+    if (!allowed.has(flag)) return flag;
+  }
+
+  return null;
+}
+
+function isInputError(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith("Invalid number for --");
 }
