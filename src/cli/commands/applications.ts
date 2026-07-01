@@ -1,5 +1,5 @@
 import { applyToVacancy, readCoverLetter } from "../../hh/applications";
-import { errorMessage, writeData, writeError } from "../output";
+import { writeData, writeError } from "../output";
 import type { CommandSpec } from "./types";
 import { legacy, scoped } from "./shared";
 
@@ -85,7 +85,7 @@ export const applicationsApplyCommand: CommandSpec = {
       });
       return 0;
     } catch (error) {
-      writeError(context, "HH_ERROR", errorMessage(error));
+      writeError(context, "HH_ERROR", error);
       return 2;
     }
   },

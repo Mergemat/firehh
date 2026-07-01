@@ -4,7 +4,7 @@ import {
   suitableSearchOptions,
   vacancySummary,
 } from "../../hh/vacancies";
-import { errorMessage, writeData, writeError } from "../output";
+import { writeData, writeError } from "../output";
 import type { ParsedArgs } from "../args";
 import type { CommandSpec } from "./types";
 import { legacy, scoped } from "./shared";
@@ -34,7 +34,7 @@ export const vacancyViewCommand: CommandSpec = {
       writeData(context, vacancySummary(vacancy));
       return 0;
     } catch (error) {
-      writeError(context, "HH_ERROR", errorMessage(error));
+      writeError(context, "HH_ERROR", error);
       return 2;
     }
   },
@@ -135,7 +135,7 @@ export const vacanciesSuitableCommand: CommandSpec = {
       writeError(
         context,
         inputError ? "INPUT_ERROR" : "HH_ERROR",
-        errorMessage(error),
+        error,
       );
       return inputError ? 1 : 2;
     }

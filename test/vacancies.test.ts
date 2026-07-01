@@ -149,4 +149,88 @@ describe("vacancy suitable search", () => {
       },
     });
   });
+
+  test("reports captcha as compact agent instruction", async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          errors: [
+            {
+              value: "captcha_required",
+              captcha_url: "https://hh.ru/account/captcha?state=abc",
+              type: "captcha_required",
+            },
+          ],
+        }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+
+    let stdout = "";
+    let stderr = "";
+    const exitCode = await runCli(["vacancies", "view", "123"], {
+      env: { HH_ACCESS_TOKEN: "token" },
+      io: {
+        stdout: (text) => {
+          stdout += text;
+        },
+        stderr: (text) => {
+          stderr += text;
+        },
+        question: async () => "",
+      },
+    });
+
+    expect(exitCode).toBe(2);
+    expect(stdout).toBe("");
+    expect(JSON.parse(stderr)).toEqual({
+      ok: false,
+      error: {
+        code: "captcha",
+        message: "open captcha_url solve retry",
+        captcha_url: "https://hh.ru/account/captcha?state=abc",
+      },
+    });
+  });
+
+  test("reports generic HH errors without nested JSON", async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          errors: [
+            {
+              value: "forbidden",
+              type: "forbidden",
+            },
+          ],
+        }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+
+    let stderr = "";
+    const exitCode = await runCli(["resumes", "list"], {
+      env: { HH_ACCESS_TOKEN: "token" },
+      io: {
+        stdout: () => {},
+        stderr: (text) => {
+          stderr += text;
+        },
+        question: async () => "",
+      },
+    });
+
+    expect(exitCode).toBe(2);
+    expect(JSON.parse(stderr)).toEqual({
+      ok: false,
+      error: {
+        code: "hh_403",
+        message: "forbidden",
+      },
+    });
+  });
 });

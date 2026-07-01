@@ -120,4 +120,47 @@ describe("applications apply", () => {
       },
     });
   });
+
+  test("reports direct employer response as compact instruction", async () => {
+    globalThis.fetch = async () =>
+      new Response(null, {
+        status: 303,
+        headers: {
+          Location: "https://hh.ru/applicant/vacancy_response?vacancyId=123",
+        },
+      });
+
+    let stderr = "";
+    const exitCode = await runCli(
+      [
+        "applications",
+        "apply",
+        "vacancy-id",
+        "--resume",
+        "resume-id",
+        "--message",
+        "hello",
+      ],
+      {
+        env: { HH_ACCESS_TOKEN: "token" },
+        io: {
+          stdout: () => {},
+          stderr: (text) => {
+            stderr += text;
+          },
+          question: async () => "",
+        },
+      },
+    );
+
+    expect(exitCode).toBe(2);
+    expect(JSON.parse(stderr)).toEqual({
+      ok: false,
+      error: {
+        code: "direct_response",
+        message: "open url apply manually",
+        url: "https://hh.ru/applicant/vacancy_response?vacancyId=123",
+      },
+    });
+  });
 });

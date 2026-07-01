@@ -1,7 +1,7 @@
 import { captureAuthRedirectWithBrowser } from "../../browser-auth";
 import { exchangeCodeForToken, readTokenWithSource } from "../../auth";
 import { clientCredentials, tokenFilePath } from "../../config";
-import { errorMessage, writeData, writeError } from "../output";
+import { writeData, writeError } from "../output";
 import type { CommandSpec } from "./types";
 import { legacy, scoped } from "./shared";
 
@@ -62,7 +62,7 @@ export const authLoginCommand: CommandSpec = {
       });
       return 0;
     } catch (error) {
-      writeError(context, "AUTH_ERROR", errorMessage(error));
+      writeError(context, "AUTH_ERROR", error);
       return 2;
     }
   },
@@ -95,7 +95,7 @@ export const authStatusCommand: CommandSpec = {
       });
       return 0;
     } catch (error) {
-      writeError(context, "AUTH_ERROR", errorMessage(error));
+      writeError(context, "AUTH_ERROR", error);
       return 2;
     }
   },

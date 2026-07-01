@@ -1,6 +1,6 @@
 import { getResumes, getSuitableResumes, resumeSummary } from "../../hh/resumes";
 import { requireEligibleVacancy, vacancySummary } from "../../hh/vacancies";
-import { errorMessage, writeData, writeError } from "../output";
+import { writeData, writeError } from "../output";
 import type { CommandSpec } from "./types";
 import { legacy, scoped } from "./shared";
 
@@ -25,7 +25,7 @@ export const resumesListCommand: CommandSpec = {
       });
       return 0;
     } catch (error) {
-      writeError(context, "HH_ERROR", errorMessage(error));
+      writeError(context, "HH_ERROR", error);
       return 2;
     }
   },
@@ -69,7 +69,7 @@ export const resumesForVacancyCommand: CommandSpec = {
       });
       return 0;
     } catch (error) {
-      writeError(context, "HH_ERROR", errorMessage(error));
+      writeError(context, "HH_ERROR", error);
       return 2;
     }
   },

@@ -8,6 +8,7 @@ import {
   tokenFilePath,
 } from "./config";
 import type { EnvMap, TokenFile } from "./types";
+import { hhResponseError } from "./hh/errors";
 
 export type TokenSource = "env" | "file";
 
@@ -119,9 +120,7 @@ export async function exchangeCodeForToken(
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(
-      `HH token exchange error ${response.status}: ${JSON.stringify(data ?? {})}`,
-    );
+    throw hhResponseError(response.status, data);
   }
 
   return saveToken(env, data as TokenFile);
@@ -152,9 +151,7 @@ export async function refreshToken(
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(
-      `HH token refresh error ${response.status}: ${JSON.stringify(data ?? {})}`,
-    );
+    throw hhResponseError(response.status, data);
   }
 
   return saveToken(env, data as TokenFile);

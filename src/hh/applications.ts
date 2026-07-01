@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import type { EnvMap } from "../types";
 import { hhFetch } from "./client";
+import { directResponseError, hhResponseError } from "./errors";
 
 export async function readMessageFile(path: string): Promise<string> {
   if (extname(path).toLowerCase() === ".docx") {
@@ -71,11 +72,9 @@ export async function applyToVacancy(
   }
 
   if (response.status === 303) {
-    throw new Error(`Direct employer response required: ${location ?? "unknown URL"}`);
+    throw directResponseError(location);
   }
 
   const data = await response.json().catch(() => null);
-  throw new Error(
-    `HH apply error ${response.status}: ${JSON.stringify(data ?? {})}`,
-  );
+  throw hhResponseError(response.status, data);
 }

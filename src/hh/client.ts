@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "../config";
 import { requireValidToken } from "../auth";
 import type { EnvMap } from "../types";
+import { hhResponseError } from "./errors";
 
 export async function hhFetch(
   env: EnvMap,
@@ -30,9 +31,7 @@ export async function hhJson<T>(
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(
-      `HH API error ${response.status}: ${JSON.stringify(data ?? {})}`,
-    );
+    throw hhResponseError(response.status, data);
   }
 
   return data as T;
