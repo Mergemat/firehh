@@ -1,6 +1,11 @@
 import { captureAuthRedirectWithBrowser } from "../../browser-auth";
 import { exchangeCodeForToken, readTokenWithSource } from "../../auth";
 import { clientCredentials, tokenFilePath } from "../../config";
+import {
+  assertKnownFlags,
+  isInputError,
+  positiveSecondsFlag,
+} from "../command-options";
 import { writeData, writeError } from "../output";
 import type { CommandSpec } from "./types";
 import { legacy, scoped } from "./shared";
@@ -35,6 +40,7 @@ export const authLoginCommand: CommandSpec = {
   matches: (parsed) => scoped(parsed, "auth", "login"),
   run: async ({ parsed, context }) => {
     try {
+      assertKnownFlags(parsed.flags, authLoginCommand.help.options, "auth login");
       const credentials = clientCredentials(context.env);
       context.io.stderr(
         [
@@ -46,7 +52,7 @@ export const authLoginCommand: CommandSpec = {
       );
       const redirectUrl = await captureAuthRedirectWithBrowser({
         env: context.env,
-        timeoutMs: timeoutMs(parsed.flags),
+        timeoutMs: positiveSecondsFlag(parsed.flags, "timeout", 180),
         browserPath: parsed.flags.get("browser") || undefined,
         onStatus: (message) => context.io.stderr(`${message}\n`),
       });
@@ -62,8 +68,9 @@ export const authLoginCommand: CommandSpec = {
       });
       return 0;
     } catch (error) {
-      writeError(context, "AUTH_ERROR", error);
-      return 2;
+      const input = isInputError(error);
+      writeError(context, input ? "INPUT_ERROR" : "AUTH_ERROR", error);
+      return input ? 1 : 2;
     }
   },
 };
@@ -79,8 +86,9 @@ export const authStatusCommand: CommandSpec = {
     examples: [{ command: "firehh auth status" }],
   },
   matches: (parsed) => scoped(parsed, "auth", "status") || legacy(parsed, "token"),
-  run: async ({ context }) => {
+  run: async ({ parsed, context }) => {
     try {
+      assertKnownFlags(parsed.flags, authStatusCommand.help.options, "auth status");
       const result = await readTokenWithSource(context.env);
       const token = result?.token ?? null;
       writeData(context, {
@@ -95,20 +103,9 @@ export const authStatusCommand: CommandSpec = {
       });
       return 0;
     } catch (error) {
-      writeError(context, "AUTH_ERROR", error);
-      return 2;
+      const input = isInputError(error);
+      writeError(context, input ? "INPUT_ERROR" : "AUTH_ERROR", error);
+      return input ? 1 : 2;
     }
   },
 };
-
-function timeoutMs(flags: Map<string, string>): number {
-  const raw = flags.get("timeout");
-  if (!raw) return 180_000;
-
-  const seconds = Number(raw);
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    throw new Error("--timeout must be a positive number of seconds.");
-  }
-
-  return seconds * 1000;
-}

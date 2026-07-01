@@ -2,8 +2,19 @@ import {
   applicationStatus,
   applyToVacancy,
   listApplications,
-  readCoverLetter,
+  type ApplicationsListOptions,
 } from "../../hh/applications";
+import {
+  coverLetterSourceFromFlags,
+  readCoverLetter,
+} from "../cover-letter";
+import {
+  assertKnownFlags,
+  inputError,
+  isInputError,
+  numberFlag,
+  optionalStringFlag,
+} from "../command-options";
 import { writeData, writeError } from "../output";
 import type { CommandSpec } from "./types";
 import { legacy, scoped } from "./shared";
@@ -48,23 +59,30 @@ export const applicationsApplyCommand: CommandSpec = {
   matches: (parsed) =>
     scoped(parsed, "applications", "apply") || legacy(parsed, "apply"),
   run: async ({ parsed, context }) => {
-    const vacancyId =
-      parsed.command === "apply" ? parsed.positionals[1] : parsed.positionals[2];
-    const resumeId = parsed.flags.get("resume") || parsed.flags.get("resume-id");
-    const dryRun = parsed.flags.has("dry-run");
-
-    if (!vacancyId || !resumeId) {
-      writeError(
-        context,
-        "INPUT_ERROR",
-        "Usage: firehh applications apply <vacancy-id> --resume <resume-id> --message-file <path>",
-      );
-      return 1;
-    }
-
     try {
-      const message = await readCoverLetter(parsed.flags);
-      if (!message) throw new Error("Cover letter is empty.");
+      assertKnownFlags(
+        parsed.flags,
+        applicationsApplyCommand.help.options,
+        "applications apply",
+        ["resume-id", "letter-file"],
+      );
+
+      const vacancyId =
+        parsed.command === "apply" ? parsed.positionals[1] : parsed.positionals[2];
+      const resumeId = parsed.flags.get("resume") || parsed.flags.get("resume-id");
+      const dryRun = parsed.flags.has("dry-run");
+
+      if (!vacancyId || !resumeId) {
+        writeError(
+          context,
+          "INPUT_ERROR",
+          "Usage: firehh applications apply <vacancy-id> --resume <resume-id> --message-file <path>",
+        );
+        return 1;
+      }
+
+      const message = await readCoverLetter(coverLetterSourceFromFlags(parsed.flags));
+      if (!message) throw inputError("Cover letter is empty.");
 
       if (dryRun) {
         writeData(context, {
@@ -90,8 +108,9 @@ export const applicationsApplyCommand: CommandSpec = {
       });
       return 0;
     } catch (error) {
-      writeError(context, "HH_ERROR", error);
-      return 2;
+      const input = isInputError(error);
+      writeError(context, input ? "INPUT_ERROR" : "HH_ERROR", error);
+      return input ? 1 : 2;
     }
   },
 };
@@ -115,21 +134,17 @@ export const applicationsStatusCommand: CommandSpec = {
     }
 
     try {
-      const unsupportedFlag = firstUnsupportedFlag(parsed.flags, ["help", "version"]);
-      if (unsupportedFlag) {
-        writeError(
-          context,
-          "INPUT_ERROR",
-          `Unsupported flag for applications status: --${unsupportedFlag}`,
-        );
-        return 1;
-      }
-
+      assertKnownFlags(
+        parsed.flags,
+        applicationsStatusCommand.help.options,
+        "applications status",
+      );
       writeData(context, await applicationStatus(context.env, vacancyId));
       return 0;
     } catch (error) {
-      writeError(context, "HH_ERROR", error);
-      return 2;
+      const input = isInputError(error);
+      writeError(context, input ? "INPUT_ERROR" : "HH_ERROR", error);
+      return input ? 1 : 2;
     }
   },
 };
@@ -165,83 +180,37 @@ export const applicationsListCommand: CommandSpec = {
   matches: (parsed) => scoped(parsed, "applications", "list"),
   run: async ({ parsed, context }) => {
     try {
-      const unsupportedFlag = firstUnsupportedFlag(parsed.flags, [
-        "since",
-        "page",
-        "per-page",
-        "help",
-        "version",
-      ]);
-      if (unsupportedFlag) {
-        writeError(
-          context,
-          "INPUT_ERROR",
-          `Unsupported flag for applications list: --${unsupportedFlag}`,
-        );
-        return 1;
-      }
+      assertKnownFlags(
+        parsed.flags,
+        applicationsListCommand.help.options,
+        "applications list",
+      );
 
-      const result = await listApplications(context.env, {
-        since: optionalStringFlag(parsed.flags, "since"),
-        page: numberFlag(parsed.flags, "page", 0),
-        perPage: numberFlag(parsed.flags, "per-page", 50, { min: 1, max: 100 }),
-      });
+      const result = await listApplications(
+        context.env,
+        parseApplicationsListOptions(parsed.flags),
+      );
       writeData(context, result);
       return 0;
     } catch (error) {
-      const inputError = isInputError(error);
-      writeError(context, inputError ? "INPUT_ERROR" : "HH_ERROR", error);
-      return inputError ? 1 : 2;
+      const input = isInputError(error);
+      writeError(context, input ? "INPUT_ERROR" : "HH_ERROR", error);
+      return input ? 1 : 2;
     }
   },
 };
 
-function firstUnsupportedFlag(
+function parseApplicationsListOptions(
   flags: Map<string, string>,
-  allowedFlags: string[],
-): string | null {
-  const allowed = new Set(allowedFlags);
-
-  for (const flag of flags.keys()) {
-    if (!allowed.has(flag)) return flag;
+): ApplicationsListOptions {
+  const since = optionalStringFlag(flags, "since");
+  if (since && Number.isNaN(Date.parse(since))) {
+    throw inputError(`Invalid date for --since: ${since}`);
   }
 
-  return null;
-}
-
-function optionalStringFlag(
-  flags: Map<string, string>,
-  key: string,
-): string | undefined {
-  const value = flags.get(key);
-  return value === undefined || value === "" ? undefined : value;
-}
-
-function numberFlag(
-  flags: Map<string, string>,
-  key: string,
-  fallback: number,
-  range: { min?: number; max?: number } = {},
-): number {
-  const value = flags.get(key);
-  if (value === undefined || value === "") return fallback;
-
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < (range.min ?? 0)) {
-    throw new Error(`Invalid number for --${key}: ${value}`);
-  }
-
-  if (range.max !== undefined && parsed > range.max) {
-    throw new Error(`Invalid number for --${key}: ${value}`);
-  }
-
-  return parsed;
-}
-
-function isInputError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.message.startsWith("Invalid number for --") ||
-      error.message.startsWith("Invalid date for --"))
-  );
+  return {
+    since,
+    page: numberFlag(flags, "page", 0),
+    perPage: numberFlag(flags, "per-page", 50, { min: 1, max: 100 }),
+  };
 }

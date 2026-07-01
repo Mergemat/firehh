@@ -2,8 +2,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   searchVacancies,
   searchSuitableVacancies,
-  suitableSearchOptions,
-  vacancySearchOptions,
 } from "../src/hh/vacancies";
 import { runCli } from "../src/cli/run";
 
@@ -35,12 +33,7 @@ describe("vacancy suitable search", () => {
       );
     };
 
-    const options = suitableSearchOptions(
-      new Map([
-        ["page", "1"],
-        ["per-page", "50"],
-      ]),
-    );
+    const options = { page: 1, perPage: 50 };
 
     await searchSuitableVacancies(
       { HH_ACCESS_TOKEN: "token" },
@@ -119,10 +112,27 @@ describe("vacancy suitable search", () => {
     });
   });
 
-  test("rejects out-of-range per-page instead of clamping", () => {
-    expect(() =>
-      suitableSearchOptions(new Map([["per-page", "500"]])),
-    ).toThrow("Invalid number for --per-page: 500");
+  test("rejects out-of-range per-page instead of clamping", async () => {
+    let stderr = "";
+
+    const exitCode = await runCli(
+      ["vacancies", "suitable", "resume-id", "--per-page", "500"],
+      {
+        env: {},
+        io: {
+          stdout: () => {},
+          stderr: (text) => {
+            stderr += text;
+          },
+          question: async () => "",
+        },
+      },
+    );
+
+    expect(exitCode).toBe(1);
+    expect(JSON.parse(stderr).error.message).toBe(
+      "Invalid number for --per-page: 500",
+    );
   });
 
   test("reports out-of-range per-page as input error", async () => {
@@ -287,21 +297,22 @@ describe("vacancy search", () => {
       );
     };
 
-    const options = vacancySearchOptions(
-      new Map([
-        ["text", "frontend react"],
-        ["area", "1"],
-        ["remote", ""],
-        ["hybrid", ""],
-        ["employment", "full"],
-        ["experience", "between1And3"],
-        ["published-after", "2026-06-01"],
-        ["salary-from", "200000"],
-        ["only-accredited", ""],
-        ["must", "React|TypeScript"],
-        ["reject", "Vue|ГПХ|ИП"],
-      ]),
-    );
+    const options = {
+      text: "frontend react",
+      area: "1",
+      remote: true,
+      hybrid: true,
+      employment: "full",
+      experience: "between1And3",
+      publishedAfter: "2026-06-01",
+      salaryFrom: 200000,
+      salaryTo: undefined,
+      onlyAccredited: true,
+      page: 0,
+      perPage: 20,
+      must: /React|TypeScript/iu,
+      reject: /Vue|ГПХ|ИП/iu,
+    };
 
     const vacancies = await searchVacancies({ HH_ACCESS_TOKEN: "token" }, options);
 

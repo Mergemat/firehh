@@ -1,19 +1,30 @@
 import {
   getVacancy,
-  searchVacancies,
   searchSuitableVacancies,
-  suitableSearchOptions,
-  type NormalizedVacancy,
+  searchVacancies,
+  type SuitableSearchOptions,
   type VacancySearchOptions,
-  vacancySearchOptions,
   vacancySummary,
 } from "../../hh/vacancies";
-import { writeData, writeError } from "../output";
 import type { ParsedArgs } from "../args";
+import {
+  assertKnownFlags,
+  booleanFlag,
+  inputError,
+  isInputError,
+  numberFlag,
+  oneOfFlag,
+  optionalNumberFlag,
+  optionalStringFlag,
+  regexFlag,
+} from "../command-options";
+import { writeData, writeError } from "../output";
 import type { CommandSpec } from "./types";
 import { legacy, scoped } from "./shared";
-
-type VacancySearchFormat = "json" | "tsv" | "md" | "jsonl";
+import {
+  writeVacancySearchResult,
+  type VacancySearchFormat,
+} from "./vacancy-output";
 
 export const vacancyViewCommand: CommandSpec = {
   id: "vacancies.view",
@@ -36,12 +47,14 @@ export const vacancyViewCommand: CommandSpec = {
     }
 
     try {
+      assertKnownFlags(parsed.flags, vacancyViewCommand.help.options, "vacancies view");
       const vacancy = await getVacancy(context.env, vacancyId);
       writeData(context, vacancySummary(vacancy));
       return 0;
     } catch (error) {
-      writeError(context, "HH_ERROR", error);
-      return 2;
+      const input = isInputError(error);
+      writeError(context, input ? "INPUT_ERROR" : "HH_ERROR", error);
+      return input ? 1 : 2;
     }
   },
 };
@@ -127,43 +140,24 @@ export const vacanciesSearchCommand: CommandSpec = {
   matches: (parsed) => scoped(parsed, "vacancies", "search"),
   run: async ({ parsed, context }) => {
     try {
-      const unsupportedFlag = firstUnsupportedFlag(parsed.flags, [
-        "text",
-        "area",
-        "remote",
-        "hybrid",
-        "employment",
-        "experience",
-        "salary-from",
-        "salary-to",
-        "only-accredited",
-        "published-after",
-        "must",
-        "reject",
-        "format",
-        "page",
-        "per-page",
-        "help",
-        "version",
-      ]);
-      if (unsupportedFlag) {
-        writeError(
-          context,
-          "INPUT_ERROR",
-          `Unsupported flag for vacancies search: --${unsupportedFlag}`,
-        );
-        return 1;
-      }
+      assertKnownFlags(
+        parsed.flags,
+        vacanciesSearchCommand.help.options,
+        "vacancies search",
+      );
 
-      const options = vacancySearchOptions(parsed.flags);
-      const format = vacancySearchFormat(parsed.flags);
+      const options = parseVacancySearchOptions(parsed.flags);
+      const format = parseVacancySearchFormat(parsed.flags);
       const vacancies = await searchVacancies(context.env, options);
-      writeVacancySearchResult(context, vacancies, options, format, parsed.flags);
+      writeVacancySearchResult(context, vacancies, options, format, {
+        must: optionalStringFlag(parsed.flags, "must"),
+        reject: optionalStringFlag(parsed.flags, "reject"),
+      });
       return 0;
     } catch (error) {
-      const inputError = isInputError(error);
-      writeError(context, inputError ? "INPUT_ERROR" : "HH_ERROR", error);
-      return inputError ? 1 : 2;
+      const input = isInputError(error);
+      writeError(context, input ? "INPUT_ERROR" : "HH_ERROR", error);
+      return input ? 1 : 2;
     }
   },
 };
@@ -200,20 +194,11 @@ export const vacanciesSuitableCommand: CommandSpec = {
       const explicitResumeId =
         parsed.command === "suitable" ? parsed.positionals[1] : parsed.positionals[2];
 
-      const unsupportedFlag = firstUnsupportedFlag(parsed.flags, [
-        "page",
-        "per-page",
-        "help",
-        "version",
-      ]);
-      if (unsupportedFlag) {
-        writeError(
-          context,
-          "INPUT_ERROR",
-          `Unsupported flag for vacancies suitable: --${unsupportedFlag}`,
-        );
-        return 1;
-      }
+      assertKnownFlags(
+        parsed.flags,
+        vacanciesSuitableCommand.help.options,
+        "vacancies suitable",
+      );
 
       if (!explicitResumeId) {
         writeError(
@@ -239,7 +224,7 @@ export const vacanciesSuitableCommand: CommandSpec = {
         return 1;
       }
 
-      const options = suitableSearchOptions(parsed.flags);
+      const options = parseSuitableSearchOptions(parsed.flags);
       const vacancies = await searchSuitableVacancies(
         context.env,
         resumeId,
@@ -259,16 +244,63 @@ export const vacanciesSuitableCommand: CommandSpec = {
       });
       return 0;
     } catch (error) {
-      const inputError = isInputError(error);
+      const input = isInputError(error);
       writeError(
         context,
-        inputError ? "INPUT_ERROR" : "HH_ERROR",
+        input ? "INPUT_ERROR" : "HH_ERROR",
         error,
       );
-      return inputError ? 1 : 2;
+      return input ? 1 : 2;
     }
   },
 };
+
+function parseSuitableSearchOptions(
+  flags: Map<string, string>,
+): SuitableSearchOptions {
+  return {
+    page: numberFlag(flags, "page", 0),
+    perPage: numberFlag(flags, "per-page", 20, { min: 1, max: 100 }),
+  };
+}
+
+function parseVacancySearchOptions(
+  flags: Map<string, string>,
+): VacancySearchOptions {
+  const salaryFrom = optionalNumberFlag(flags, "salary-from");
+  const salaryTo = optionalNumberFlag(flags, "salary-to");
+
+  if (
+    salaryFrom !== undefined &&
+    salaryTo !== undefined &&
+    salaryTo < salaryFrom
+  ) {
+    throw inputError("--salary-to must be greater than or equal to --salary-from");
+  }
+
+  return {
+    text: optionalStringFlag(flags, "text"),
+    area: optionalStringFlag(flags, "area"),
+    remote: booleanFlag(flags, "remote"),
+    hybrid: booleanFlag(flags, "hybrid"),
+    employment: optionalStringFlag(flags, "employment"),
+    experience: optionalStringFlag(flags, "experience"),
+    salaryFrom,
+    salaryTo,
+    onlyAccredited: booleanFlag(flags, "only-accredited"),
+    publishedAfter: optionalStringFlag(flags, "published-after"),
+    page: numberFlag(flags, "page", 0),
+    perPage: numberFlag(flags, "per-page", 20, { min: 1, max: 100 }),
+    must: regexFlag(flags, "must"),
+    reject: regexFlag(flags, "reject"),
+  };
+}
+
+function parseVacancySearchFormat(
+  flags: Map<string, string>,
+): VacancySearchFormat {
+  return oneOfFlag(flags, "format", ["json", "tsv", "md", "jsonl"] as const, "json");
+}
 
 function looksLikeLegacyVacancyView(parsed: ParsedArgs): boolean {
   if (!parsed.command || parsed.subcommand !== undefined) return false;
@@ -284,182 +316,4 @@ function looksLikeLegacyVacancyView(parsed: ParsedArgs): boolean {
     "applications",
     "apply",
   ].includes(parsed.command);
-}
-
-function firstUnsupportedFlag(
-  flags: Map<string, string>,
-  allowedFlags: string[],
-): string | null {
-  const allowed = new Set(allowedFlags);
-
-  for (const flag of flags.keys()) {
-    if (!allowed.has(flag)) return flag;
-  }
-
-  return null;
-}
-
-function isInputError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.message.startsWith("Invalid number for --") ||
-      error.message.startsWith("Invalid regex for --") ||
-      error.message.startsWith("Unsupported --format") ||
-      error.message.startsWith("--salary-to"))
-  );
-}
-
-function vacancySearchFormat(flags: Map<string, string>): VacancySearchFormat {
-  const format = flags.get("format") || "json";
-  if (
-    format === "json" ||
-    format === "tsv" ||
-    format === "md" ||
-    format === "jsonl"
-  ) {
-    return format;
-  }
-
-  throw new Error(`Unsupported --format: ${format}`);
-}
-
-function writeVacancySearchResult(
-  context: Parameters<CommandSpec["run"]>[0]["context"],
-  vacancies: Awaited<ReturnType<typeof searchVacancies>>,
-  options: VacancySearchOptions,
-  format: VacancySearchFormat,
-  flags: Map<string, string>,
-): void {
-  const items = vacancies.items.map(vacancySummary);
-
-  if (format === "jsonl") {
-    for (const item of items) {
-      context.io.stdout(`${JSON.stringify(item)}\n`);
-    }
-    return;
-  }
-
-  if (format === "tsv") {
-    context.io.stdout(renderVacancyTsv(items));
-    return;
-  }
-
-  if (format === "md") {
-    context.io.stdout(renderVacancyMarkdown(items));
-    return;
-  }
-
-  writeData(context, {
-    query: vacancySearchQuery(options, flags),
-    found: vacancies.found,
-    page: vacancies.page,
-    pages: vacancies.pages,
-    per_page: vacancies.per_page,
-    matched_items: items.length,
-    items,
-  });
-}
-
-function vacancySearchQuery(
-  options: VacancySearchOptions,
-  flags: Map<string, string>,
-) {
-  return {
-    text: options.text ?? null,
-    area: options.area ?? null,
-    remote: options.remote,
-    hybrid: options.hybrid,
-    employment: options.employment ?? null,
-    experience: options.experience ?? null,
-    salary_from: options.salaryFrom ?? null,
-    salary_to: options.salaryTo ?? null,
-    only_accredited: options.onlyAccredited,
-    published_after: options.publishedAfter ?? null,
-    must: flags.get("must") || null,
-    reject: flags.get("reject") || null,
-  };
-}
-
-function renderVacancyTsv(items: NormalizedVacancy[]): string {
-  const rows = vacancyTableRows(items);
-  return [
-    vacancyTableColumns.join("\t"),
-    ...rows.map((row) =>
-      vacancyTableColumns.map((column) => tsvCell(row[column])).join("\t"),
-    ),
-  ]
-    .join("\n")
-    .concat("\n");
-}
-
-function renderVacancyMarkdown(items: NormalizedVacancy[]): string {
-  const rows = vacancyTableRows(items);
-  const header = `| ${vacancyTableColumns.join(" | ")} |`;
-  const separator = `| ${vacancyTableColumns.map(() => "---").join(" | ")} |`;
-  const body = rows.map(
-    (row) =>
-      `| ${vacancyTableColumns.map((column) => markdownCell(row[column])).join(" | ")} |`,
-  );
-
-  return [header, separator, ...body].join("\n").concat("\n");
-}
-
-const vacancyTableColumns = [
-  "id",
-  "name",
-  "employer",
-  "area",
-  "salary_from",
-  "salary_to",
-  "gross",
-  "employment",
-  "schedule",
-  "experience",
-  "accredited_it_employer",
-  "formalization",
-  "published_at",
-  "url",
-] as const;
-
-type VacancyTableColumn = (typeof vacancyTableColumns)[number];
-type VacancyTableRow = Record<VacancyTableColumn, string | number | boolean | null>;
-
-function vacancyTableRows(items: NormalizedVacancy[]): VacancyTableRow[] {
-  return items.map((item) => ({
-    id: item.id,
-    name: item.name,
-    employer: item.employer?.name ?? null,
-    area: item.area?.name ?? null,
-    salary_from: item.salary.from,
-    salary_to: item.salary.to,
-    gross: item.salary.gross,
-    employment: item.employment?.name ?? item.employment_form?.name ?? null,
-    schedule: item.schedule?.name ?? null,
-    experience: item.experience?.name ?? null,
-    accredited_it_employer: item.accredited_it_employer,
-    formalization: formalizationCell(item.formalization),
-    published_at: item.published_at,
-    url: item.url,
-  }));
-}
-
-function formalizationCell(value: NormalizedVacancy["formalization"]): string {
-  return [
-    value.labor_contract ? "labor_contract" : "",
-    value.gph ? "gph" : "",
-    value.project_work ? "project_work" : "",
-    value.individual_entrepreneur ? "individual_entrepreneur" : "",
-  ]
-    .filter(Boolean)
-    .join(",");
-}
-
-function tsvCell(value: string | number | boolean | null): string {
-  return String(value ?? "").replace(/[\t\r\n]+/g, " ");
-}
-
-function markdownCell(value: string | number | boolean | null): string {
-  return String(value ?? "")
-    .replace(/\|/g, "\\|")
-    .replace(/[\r\n]+/g, " ");
 }
