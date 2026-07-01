@@ -30,8 +30,11 @@ ${modules}
 GETTING STARTED
   ${CLI_NAME} auth login
   ${CLI_NAME} resumes list
+  ${CLI_NAME} vacancies search --text "frontend react" --remote
   ${CLI_NAME} vacancies suitable <resume-id>
   ${CLI_NAME} vacancies view <vacancy-id>
+  ${CLI_NAME} applications status <vacancy-id>
+  ${CLI_NAME} applications list --since 2026-06-01
   ${CLI_NAME} applications apply <vacancy-id> --resume <resume-id> --message-file cover-letter.txt
 
 OUTPUT

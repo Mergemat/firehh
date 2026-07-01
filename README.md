@@ -55,9 +55,12 @@ HH_TOKEN_FILE=
 firehh auth login
 firehh auth status
 firehh resumes list
+firehh vacancies search --text "frontend react" --remote --employment full --format tsv
 firehh vacancies view <vacancy-id>
 firehh vacancies suitable <resume-id> --page 0 --per-page 20
 firehh resumes for-vacancy <vacancy-id>
+firehh applications status <vacancy-id>
+firehh applications list --since 2026-06-01
 firehh applications apply <vacancy-id> --resume <resume-id> --message-file cover-letter.txt
 ```
 
@@ -68,3 +71,12 @@ go to stderr. Legacy aliases still work: `firehh <vacancy-id>`, `firehh resumes`
 `firehh applications apply` does not block applications with local vacancy
 filters. It sends the requested vacancy, resume, and cover letter to HH; any
 rejection comes from the HH API response.
+
+`firehh vacancies search` runs ordinary HH vacancy search and supports local
+stack filters with `--must` / `--reject`. Use `--format tsv`, `--format md`, or
+`--format jsonl` for raw machine-friendly output.
+
+`firehh vacancies view <id>` returns normalized vacancy fields, including
+`active`, `archived`, `salary.gross`, `contacts`, `apply_url`,
+`already_applied`, and `formalization` with `labor_contract`, `gph`,
+`project_work`, and `individual_entrepreneur`.

@@ -23,11 +23,15 @@ describe("cli architecture", () => {
       },
       {
         scope: "vacancies",
-        commands: ["vacancies.view", "vacancies.suitable"],
+        commands: ["vacancies.view", "vacancies.search", "vacancies.suitable"],
       },
       {
         scope: "applications",
-        commands: ["applications.apply"],
+        commands: [
+          "applications.apply",
+          "applications.status",
+          "applications.list",
+        ],
       },
     ]);
   });

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  searchVacancies,
   searchSuitableVacancies,
   suitableSearchOptions,
+  vacancySearchOptions,
 } from "../src/hh/vacancies";
 import { runCli } from "../src/cli/run";
 
@@ -231,6 +233,223 @@ describe("vacancy suitable search", () => {
         code: "hh_403",
         message: "forbidden",
       },
+    });
+  });
+});
+
+describe("vacancy search", () => {
+  test("uses ordinary HH filters and applies local stack filters", async () => {
+    let requestedUrl: string | null = null;
+
+    globalThis.fetch = async (input) => {
+      requestedUrl = String(input);
+
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "1",
+              name: "Frontend React",
+              employer: {
+                id: "e1",
+                name: "Accredited",
+                accredited_it_employer: true,
+              },
+              area: { id: "1", name: "Москва" },
+              salary: { from: 220000, to: null, currency: "RUR", gross: true },
+              key_skills: [{ name: "React" }, { name: "TypeScript" }],
+              snippet: { requirement: "React TypeScript", responsibility: null },
+            },
+            {
+              id: "2",
+              name: "Frontend Vue",
+              employer: {
+                id: "e2",
+                name: "Also Accredited",
+                accredited_it_employer: true,
+              },
+              area: { id: "1", name: "Москва" },
+              salary: { from: 250000, to: null, currency: "RUR", gross: false },
+              key_skills: [{ name: "Vue" }],
+              civil_law_contracts: [{ id: "INDIVIDUAL_ENTREPRENEUR", name: "с ИП" }],
+              snippet: { requirement: "Vue", responsibility: null },
+            },
+          ],
+          found: 2,
+          page: 0,
+          pages: 1,
+          per_page: 20,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+
+    const options = vacancySearchOptions(
+      new Map([
+        ["text", "frontend react"],
+        ["area", "1"],
+        ["remote", ""],
+        ["hybrid", ""],
+        ["employment", "full"],
+        ["experience", "between1And3"],
+        ["published-after", "2026-06-01"],
+        ["salary-from", "200000"],
+        ["only-accredited", ""],
+        ["must", "React|TypeScript"],
+        ["reject", "Vue|ГПХ|ИП"],
+      ]),
+    );
+
+    const vacancies = await searchVacancies({ HH_ACCESS_TOKEN: "token" }, options);
+
+    expect(requestedUrl).not.toBeNull();
+    const url = new URL(requestedUrl!);
+    expect(url.pathname).toBe("/vacancies");
+    expect([...url.searchParams.entries()]).toEqual([
+      ["page", "0"],
+      ["per_page", "20"],
+      ["text", "frontend react"],
+      ["area", "1"],
+      ["employment", "full"],
+      ["experience", "between1And3"],
+      ["date_from", "2026-06-01"],
+      ["work_format", "REMOTE"],
+      ["work_format", "HYBRID"],
+    ]);
+    expect(vacancies.items.map((vacancy) => vacancy.id)).toEqual(["1"]);
+    expect(vacancies.matched_items).toBe(1);
+  });
+
+  test("prints search results as raw TSV", async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "1",
+              name: "Frontend React",
+              employer: { name: "HH", accredited_it_employer: true },
+              area: { name: "Москва" },
+              salary: { from: 200000, to: 300000, currency: "RUR", gross: true },
+              employment: { id: "full", name: "Полная занятость" },
+              published_at: "2026-06-01T10:00:00+0300",
+              alternate_url: "https://hh.ru/vacancy/1",
+            },
+          ],
+          found: 1,
+          page: 0,
+          pages: 1,
+          per_page: 20,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+
+    let stdout = "";
+    let stderr = "";
+    const exitCode = await runCli(
+      ["vacancies", "search", "--text", "react", "--format", "tsv"],
+      {
+        env: { HH_ACCESS_TOKEN: "token" },
+        io: {
+          stdout: (text) => {
+            stdout += text;
+          },
+          stderr: (text) => {
+            stderr += text;
+          },
+          question: async () => "",
+        },
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout.split("\n")[0]).toBe(
+      "id\tname\temployer\tarea\tsalary_from\tsalary_to\tgross\temployment\tschedule\texperience\taccredited_it_employer\tformalization\tpublished_at\turl",
+    );
+    expect(stdout).toContain("1\tFrontend React\tHH\tМосква\t200000\t300000\ttrue");
+  });
+
+  test("normalizes vacancy view fields", async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          id: "1",
+          name: "Frontend React",
+          archived: false,
+          published_at: "2026-06-01T10:00:00+0300",
+          salary: { from: 200000, to: 300000, currency: "RUR", gross: true },
+          employer: {
+            id: "e1",
+            name: "HH",
+            accredited_it_employer: true,
+          },
+          area: { id: "1", name: "Москва" },
+          employment: { id: "full", name: "Полная занятость" },
+          schedule: { id: "remote", name: "Удаленная работа" },
+          experience: { id: "between1And3", name: "1-3 года" },
+          key_skills: [{ name: "React" }],
+          description: "<p>Hello&nbsp;React</p>",
+          contacts: {
+            name: "Ivan",
+            email: "ivan@example.com",
+            phones: [{ formatted: "+7 999 000-00-00", comment: "after 10" }],
+          },
+          accept_labor_contract: true,
+          civil_law_contracts: [
+            { id: "INDIVIDUAL_ENTREPRENEUR", name: "с ИП" },
+          ],
+          apply_alternate_url: "https://hh.ru/applicant/vacancy_response?vacancyId=1",
+          relations: ["got_response"],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+
+    let stdout = "";
+    const exitCode = await runCli(["vacancies", "view", "1"], {
+      env: { HH_ACCESS_TOKEN: "token" },
+      io: {
+        stdout: (text) => {
+          stdout += text;
+        },
+        stderr: () => {},
+        question: async () => "",
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    const payload = JSON.parse(stdout);
+    expect(payload.data).toMatchObject({
+      active: true,
+      archived: false,
+      published_at: "2026-06-01T10:00:00+0300",
+      salary: { gross: true },
+      accredited_it_employer: true,
+      employer: { id: "e1", name: "HH" },
+      area: { id: "1", name: "Москва" },
+      key_skills: ["React"],
+      description_text: "Hello React",
+      contacts: {
+        name: "Ivan",
+        email: "ivan@example.com",
+        phones: [{ formatted: "+7 999 000-00-00", comment: "after 10" }],
+      },
+      formalization: {
+        labor_contract: true,
+        gph: true,
+        individual_entrepreneur: true,
+      },
+      apply_url: "https://hh.ru/applicant/vacancy_response?vacancyId=1",
+      already_applied: true,
     });
   });
 });

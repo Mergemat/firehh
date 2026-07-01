@@ -1,4 +1,9 @@
-import { applyToVacancy, readCoverLetter } from "../../hh/applications";
+import {
+  applicationStatus,
+  applyToVacancy,
+  listApplications,
+  readCoverLetter,
+} from "../../hh/applications";
 import { writeData, writeError } from "../output";
 import type { CommandSpec } from "./types";
 import { legacy, scoped } from "./shared";
@@ -90,3 +95,153 @@ export const applicationsApplyCommand: CommandSpec = {
     }
   },
 };
+
+export const applicationsStatusCommand: CommandSpec = {
+  id: "applications.status",
+  usage: "applications status <vacancy-id>",
+  help: {
+    summary: "Check whether this account already applied to a vacancy",
+    description:
+      "Checks HH negotiations for the vacancy id and returns a normalized application status.",
+    examples: [{ command: "firehh applications status 133561763" }],
+  },
+  matches: (parsed) => scoped(parsed, "applications", "status"),
+  run: async ({ parsed, context }) => {
+    const vacancyId = parsed.positionals[2];
+
+    if (!vacancyId) {
+      writeError(context, "INPUT_ERROR", "Usage: firehh applications status <vacancy-id>");
+      return 1;
+    }
+
+    try {
+      const unsupportedFlag = firstUnsupportedFlag(parsed.flags, ["help", "version"]);
+      if (unsupportedFlag) {
+        writeError(
+          context,
+          "INPUT_ERROR",
+          `Unsupported flag for applications status: --${unsupportedFlag}`,
+        );
+        return 1;
+      }
+
+      writeData(context, await applicationStatus(context.env, vacancyId));
+      return 0;
+    } catch (error) {
+      writeError(context, "HH_ERROR", error);
+      return 2;
+    }
+  },
+};
+
+export const applicationsListCommand: CommandSpec = {
+  id: "applications.list",
+  usage: "applications list [--since <date>] [--page <n>] [--per-page <n>]",
+  help: {
+    summary: "List recent HH applications",
+    description:
+      "Reads HH negotiations sorted by creation time and locally keeps applications created on or after --since.",
+    options: [
+      {
+        name: "--since",
+        value: "<date>",
+        summary: "Keep applications created on or after this date",
+      },
+      {
+        name: "--page",
+        value: "<n>",
+        summary: "Start page, zero-based",
+        defaultValue: "0",
+      },
+      {
+        name: "--per-page",
+        value: "<n>",
+        summary: "Number of applications per HH page",
+        defaultValue: "50",
+      },
+    ],
+    examples: [{ command: "firehh applications list --since 2026-06-01" }],
+  },
+  matches: (parsed) => scoped(parsed, "applications", "list"),
+  run: async ({ parsed, context }) => {
+    try {
+      const unsupportedFlag = firstUnsupportedFlag(parsed.flags, [
+        "since",
+        "page",
+        "per-page",
+        "help",
+        "version",
+      ]);
+      if (unsupportedFlag) {
+        writeError(
+          context,
+          "INPUT_ERROR",
+          `Unsupported flag for applications list: --${unsupportedFlag}`,
+        );
+        return 1;
+      }
+
+      const result = await listApplications(context.env, {
+        since: optionalStringFlag(parsed.flags, "since"),
+        page: numberFlag(parsed.flags, "page", 0),
+        perPage: numberFlag(parsed.flags, "per-page", 50, { min: 1, max: 100 }),
+      });
+      writeData(context, result);
+      return 0;
+    } catch (error) {
+      const inputError = isInputError(error);
+      writeError(context, inputError ? "INPUT_ERROR" : "HH_ERROR", error);
+      return inputError ? 1 : 2;
+    }
+  },
+};
+
+function firstUnsupportedFlag(
+  flags: Map<string, string>,
+  allowedFlags: string[],
+): string | null {
+  const allowed = new Set(allowedFlags);
+
+  for (const flag of flags.keys()) {
+    if (!allowed.has(flag)) return flag;
+  }
+
+  return null;
+}
+
+function optionalStringFlag(
+  flags: Map<string, string>,
+  key: string,
+): string | undefined {
+  const value = flags.get(key);
+  return value === undefined || value === "" ? undefined : value;
+}
+
+function numberFlag(
+  flags: Map<string, string>,
+  key: string,
+  fallback: number,
+  range: { min?: number; max?: number } = {},
+): number {
+  const value = flags.get(key);
+  if (value === undefined || value === "") return fallback;
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < (range.min ?? 0)) {
+    throw new Error(`Invalid number for --${key}: ${value}`);
+  }
+
+  if (range.max !== undefined && parsed > range.max) {
+    throw new Error(`Invalid number for --${key}: ${value}`);
+  }
+
+  return parsed;
+}
+
+function isInputError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message.startsWith("Invalid number for --") ||
+      error.message.startsWith("Invalid date for --"))
+  );
+}

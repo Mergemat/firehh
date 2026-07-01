@@ -1,7 +1,15 @@
 import { authLoginCommand, authStatusCommand } from "./auth";
-import { applicationsApplyCommand } from "./applications";
+import {
+  applicationsApplyCommand,
+  applicationsListCommand,
+  applicationsStatusCommand,
+} from "./applications";
 import { resumesForVacancyCommand, resumesListCommand } from "./resumes";
-import { vacanciesSuitableCommand, vacancyViewCommand } from "./vacancies";
+import {
+  vacanciesSearchCommand,
+  vacanciesSuitableCommand,
+  vacancyViewCommand,
+} from "./vacancies";
 import type { CommandModule, CommandSpec } from "./types";
 
 export const commandModules: CommandModule[] = [
@@ -21,17 +29,21 @@ export const commandModules: CommandModule[] = [
   },
   {
     scope: "vacancies",
-    summary: "Vacancy lookup and suitable search",
+    summary: "Vacancy lookup and search",
     description:
-      "Fetch vacancy details or search HH suitable vacancies by resume.",
-    commands: [vacancyViewCommand, vacanciesSuitableCommand],
+      "Fetch vacancy details, run ordinary HH search, or search suitable vacancies by resume.",
+    commands: [vacancyViewCommand, vacanciesSearchCommand, vacanciesSuitableCommand],
   },
   {
     scope: "applications",
-    summary: "Apply to vacancies",
+    summary: "Apply to vacancies and inspect applications",
     description:
-      "Read a cover letter and create HH negotiations without local vacancy filters.",
-    commands: [applicationsApplyCommand],
+      "Read a cover letter, create HH negotiations, and inspect application status.",
+    commands: [
+      applicationsApplyCommand,
+      applicationsStatusCommand,
+      applicationsListCommand,
+    ],
   },
 ];
 
